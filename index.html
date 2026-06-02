@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Life World RPG Map Prototype</title>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">MIST FRONTIER</p>
+          <h1>人生RPGマップ</h1>
+        </div>
+        <div class="current-place">
+          <span class="label">現在地</span>
+          <strong id="currentPlaceText">名もなき霧の中</strong>
+        </div>
+      </header>
+
+      <section class="world-stats" aria-live="polite">
+        <div>
+          <span class="label">探索マス</span>
+          <strong id="exploredCountText">0</strong>
+        </div>
+        <div>
+          <span class="label">総訪問</span>
+          <strong id="totalVisitsText">0</strong>
+        </div>
+        <div>
+          <span class="label">最も育った街</span>
+          <strong id="bestTownText">未発見</strong>
+        </div>
+      </section>
+
+      <section class="map-frame" aria-label="霧に包まれたRPGワールドマップ">
+        <div class="map-header">
+          <span id="statusText">霧の境界に立っています</span>
+          <span id="sourceText">疑似座標</span>
+        </div>
+        <div class="viewport-mask">
+          <div id="gridMap" class="grid-map"></div>
+          <div class="player-marker" aria-hidden="true">
+            <span>勇</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="tile-info">
+        <span class="label">見つめているマス</span>
+        <div id="selectedTileText">霧の向こうをタップしてください</div>
+      </section>
+
+      <section class="controls">
+        <button id="recordButton" type="button">現在地を記録</button>
+        <button id="boostButton" type="button">現在地を育てる +1</button>
+        <button id="resetButton" class="danger" type="button">世界をリセット</button>
+      </section>
+
+      <section class="move-pad" aria-label="疑似移動">
+        <button id="moveUpButton" type="button" aria-label="北へ移動">↑</button>
+        <button id="moveLeftButton" type="button" aria-label="西へ移動">←</button>
+        <button id="moveDownButton" type="button" aria-label="南へ移動">↓</button>
+        <button id="moveRightButton" type="button" aria-label="東へ移動">→</button>
+      </section>
+
+      <details class="debug-panel">
+        <summary>デバッグ表示</summary>
+        <label class="debug-toggle">
+          <input id="debugModeToggle" type="checkbox">
+          <span>疑似座標モード</span>
+        </label>
+        <dl>
+          <div>
+            <dt>緯度</dt>
+            <dd id="latText">--</dd>
+          </div>
+          <div>
+            <dt>経度</dt>
+            <dd id="lngText">--</dd>
+          </div>
+          <div>
+            <dt>精度</dt>
+            <dd id="accuracyText">--</dd>
+          </div>
+          <div>
+            <dt>更新</dt>
+            <dd id="updatedText">--</dd>
+          </div>
+          <div>
+            <dt>現在グリッド</dt>
+            <dd id="gridText">--</dd>
+          </div>
+        </dl>
+      </details>
+    </main>
+
+    <script src="./main.js"></script>
+  </body>
+</html>
