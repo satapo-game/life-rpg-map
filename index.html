@@ -52,6 +52,41 @@
         <div id="selectedTileText">霧の向こうをタップしてください</div>
       </section>
 
+      <section class="osm-panel">
+        <div class="osm-panel-header">
+          <div>
+            <span class="label">周辺情報</span>
+            <strong id="osmStatusText">未取得</strong>
+          </div>
+          <div>
+            <span class="label">周辺特徴</span>
+            <strong id="osmFeatureText">未判定</strong>
+          </div>
+        </div>
+        <dl class="osm-summary">
+          <div>
+            <dt>公園</dt>
+            <dd id="osmParkText">0</dd>
+          </div>
+          <div>
+            <dt>駅</dt>
+            <dd id="osmStationText">0</dd>
+          </div>
+          <div>
+            <dt>神社・寺</dt>
+            <dd id="osmWorshipText">0</dd>
+          </div>
+          <div>
+            <dt>川・水辺</dt>
+            <dd id="osmWaterText">0</dd>
+          </div>
+          <div>
+            <dt>店・飲食店</dt>
+            <dd id="osmCommercialText">0</dd>
+          </div>
+        </dl>
+      </section>
+
       <section class="controls">
         <button id="recordButton" type="button">現在地を記録</button>
         <button id="boostButton" type="button">現在地を育てる +1</button>
@@ -93,6 +128,10 @@
             <dd id="gridText">--</dd>
           </div>
         </dl>
+        <details class="osm-debug">
+          <summary>OSM要素一覧</summary>
+          <ol id="osmFeatureList"></ol>
+        </details>
       </details>
     </main>
 

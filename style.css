@@ -67,6 +67,7 @@ h1 {
 .world-stats,
 .map-frame,
 .tile-info,
+.osm-panel,
 .controls,
 .move-pad,
 .debug-panel {
@@ -263,6 +264,39 @@ dd,
     #7c6530;
 }
 
+.tile.osm-station {
+  background:
+    linear-gradient(90deg, transparent 0 20%, #d7c28a 21% 79%, transparent 80%),
+    linear-gradient(0deg, transparent 0 36%, #766646 37% 63%, transparent 64%),
+    #56513d;
+}
+
+.tile.osm-worship {
+  background:
+    radial-gradient(circle at 50% 44%, #f0d6a6 0 13%, transparent 14%),
+    linear-gradient(45deg, transparent 0 40%, #8e7350 41% 60%, transparent 61%),
+    #3d3b46;
+}
+
+.tile.osm-park {
+  background:
+    radial-gradient(circle at 28% 28%, #b7f084 0 11%, transparent 12%),
+    radial-gradient(circle at 70% 65%, #75bc5f 0 13%, transparent 14%),
+    #1f5636;
+}
+
+.tile.osm-water {
+  background:
+    linear-gradient(135deg, transparent 0 34%, rgba(176, 224, 255, 0.85) 35% 50%, transparent 51%),
+    #173c4d;
+}
+
+.tile.osm-commercial {
+  background:
+    linear-gradient(90deg, transparent 0 18%, #d2b676 19% 35%, transparent 36% 49%, #d2b676 50% 66%, transparent 67%),
+    #574534;
+}
+
 .tile.path-n::before,
 .tile.path-s::before {
   top: 0;
@@ -299,6 +333,37 @@ dd,
   min-height: 66px;
   margin-bottom: 12px;
   padding: 10px;
+}
+
+.osm-panel {
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.osm-panel-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+}
+
+.osm-panel-header > div,
+.osm-summary > div {
+  min-width: 0;
+  padding: 9px 8px;
+  background: var(--panel);
+}
+
+.osm-summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1px;
+  margin: 1px 0 0;
+  background: var(--line);
+}
+
+.osm-summary dd {
+  margin: 0;
 }
 
 .controls {
@@ -388,6 +453,29 @@ dd,
   font-size: 0.82rem;
 }
 
+.osm-debug {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.osm-debug summary {
+  min-height: 34px;
+}
+
+.osm-debug ol {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.osm-debug li {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
 .debug-toggle {
   display: inline-flex;
   align-items: center;
@@ -407,6 +495,8 @@ dd,
 @media (max-width: 380px) {
   .hero,
   .world-stats,
+  .osm-panel-header,
+  .osm-summary,
   .controls,
   .debug-panel dl {
     grid-template-columns: 1fr;
