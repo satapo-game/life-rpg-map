@@ -7,9 +7,21 @@ const MAP_RADIUS = 5; // 5なら現在地中心の11x11マップ。
 const STORAGE_KEY = "lifeRpgMap.visitedTiles.v2";
 const LEGACY_STORAGE_KEY = "lifeRpgMap.visitedTiles.v1";
 const OSM_CACHE_STORAGE_KEY = "lifeRpgMap.osmCache.v1";
+const WORLDORIA_TILES_KEY = "worldoriaTiles";
+const WORLDORIA_BUILDINGS_KEY = "worldoriaBuildings";
+const WORLDORIA_INVENTORY_KEY = "worldoriaInventory";
+const WORLDORIA_HOME_GRID_KEY = "worldoriaHomeGridId";
+const WORLDORIA_LAST_ACTIVE_KEY = "worldoriaLastActiveAt";
+const WORLDORIA_EVENT_LOGS_KEY = "worldoriaEventLogs";
 const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const OSM_SEARCH_RADIUS_M = 300;
 const OSM_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7日
+const BUILDING_SPAWN_STAY_MS = 1000 * 60 * 30; // 30分
+const DEBUG_BUILDING_SPAWN_STAY_MS = 1000 * 30; // 30秒
+const STAY_TICK_MS = 1000 * 10;
+const IDLE_EVENT_INTERVAL_MS = 1000 * 60 * 60; // 1時間に1回
+const DEBUG_IDLE_EVENT_INTERVAL_MS = 1000 * 60; // 1分に1回
+const MAX_IDLE_EVENTS = 8;
 const DEBUG_START_GRID = { x: 135123, y: 35123 };
 
 // 訪問回数に応じたマスの成長段階。ここを変えるとゲームバランスを調整できます。
@@ -64,6 +76,67 @@ const OSM_SYMBOLS = {
   commercial: "市"
 };
 
+const BUILDING_TYPES = [
+  {
+    id: "camp",
+    name: "野営地",
+    symbol: "⛺",
+    description: "旅人が休む小さな野営地。",
+    effect: "idle_explore"
+  },
+  {
+    id: "inn",
+    name: "宿屋",
+    symbol: "🏠",
+    description: "旅人が集まり、周辺を調査する。",
+    effect: "idle_explore"
+  },
+  {
+    id: "market",
+    name: "市場",
+    symbol: "🏪",
+    description: "不在中に小さな交易が発生する。",
+    effect: "idle_items"
+  },
+  {
+    id: "tower",
+    name: "見張り塔",
+    symbol: "🗼",
+    description: "周囲の霧を少しだけ晴らす。",
+    effect: "idle_reveal"
+  },
+  {
+    id: "library",
+    name: "図書館",
+    symbol: "📚",
+    description: "探索記録を整理し、知識を得る。",
+    effect: "idle_knowledge"
+  }
+];
+
+const HOME_BUILDING = {
+  id: "home",
+  name: "故郷",
+  symbol: "🏡",
+  description: "旅の始まりとなる場所。",
+  effect: "home_base"
+};
+
+const ITEM_TYPES = [
+  { id: "wood", name: "木材", symbol: "🪵" },
+  { id: "stone", name: "石材", symbol: "🪨" },
+  { id: "herb", name: "薬草", symbol: "🌿" },
+  { id: "coin", name: "古銭", symbol: "🪙" }
+];
+
+const DEFAULT_INVENTORY = {
+  wood: 0,
+  stone: 0,
+  herb: 0,
+  coin: 0,
+  knowledge: 0
+};
+
 // ===== DOM参照 =====
 const elements = {
   debugModeToggle: document.querySelector("#debugModeToggle"),
@@ -88,8 +161,21 @@ const elements = {
   osmFeatureList: document.querySelector("#osmFeatureList"),
   gridMap: document.querySelector("#gridMap"),
   selectedTileText: document.querySelector("#selectedTileText"),
+  stayTimeText: document.querySelector("#stayTimeText"),
+  buildingText: document.querySelector("#buildingText"),
+  buildingEffectText: document.querySelector("#buildingEffectText"),
+  inventoryText: document.querySelector("#inventoryText"),
+  offlineLogPanel: document.querySelector("#offlineLogPanel"),
+  offlineLogTitle: document.querySelector("#offlineLogTitle"),
+  offlineLogList: document.querySelector("#offlineLogList"),
+  eventLogList: document.querySelector("#eventLogList"),
   recordButton: document.querySelector("#recordButton"),
   boostButton: document.querySelector("#boostButton"),
+  setHomeButton: document.querySelector("#setHomeButton"),
+  debugStayButton: document.querySelector("#debugStayButton"),
+  debugIdleButton: document.querySelector("#debugIdleButton"),
+  debugBackdateButton: document.querySelector("#debugBackdateButton"),
+  closeOfflineLogButton: document.querySelector("#closeOfflineLogButton"),
   resetButton: document.querySelector("#resetButton"),
   moveUpButton: document.querySelector("#moveUpButton"),
   moveLeftButton: document.querySelector("#moveLeftButton"),
@@ -100,6 +186,10 @@ const elements = {
 // ===== アプリ状態 =====
 let visitedTiles = loadVisitedTiles();
 let osmCache = loadOsmCache();
+let buildings = loadBuildings();
+let inventory = loadInventory();
+let homeGridId = localStorage.getItem(WORLDORIA_HOME_GRID_KEY) || null;
+let eventLogs = loadEventLogs();
 let watchId = null;
 let gpsPosition = null;
 let debugMode = false;
@@ -107,6 +197,9 @@ let debugGrid = { ...DEBUG_START_GRID };
 let selectedGridId = null;
 let lastRecordedGridId = null;
 let lastRecordedAt = 0;
+let lastKnownGridId = localStorage.getItem("worldoriaLastGridId") || null;
+let stayGridId = null;
+let stayStartedAt = Date.now();
 let currentOsmGridId = null;
 let currentOsmResult = null;
 let currentOsmStatus = "未取得";
@@ -115,7 +208,7 @@ let osmRequestSerial = 0;
 // ===== localStorage =====
 function loadVisitedTiles() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    const saved = localStorage.getItem(WORLDORIA_TILES_KEY) || localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     const parsed = saved ? JSON.parse(saved) : {};
     return normalizeVisitedTiles(parsed);
   } catch (error) {
@@ -131,7 +224,14 @@ function normalizeVisitedTiles(data) {
       visitCount: Number(tile.visitCount) || 0,
       firstVisitedAt: Number(tile.firstVisitedAt) || Date.now(),
       lastVisitedAt: Number(tile.lastVisitedAt) || Date.now(),
-      placeName: tile.placeName || generatePlaceName(gridId)
+      placeName: tile.placeName || generatePlaceName(gridId),
+      stayTimeMs: Number(tile.stayTimeMs) || 0,
+      lastStayStartedAt: Number(tile.lastStayStartedAt) || null,
+      building: tile.building || null,
+      osmCategory: tile.osmCategory || null,
+      osmCategoryLabel: tile.osmCategoryLabel || null,
+      osmRpgName: tile.osmRpgName || null,
+      revealedByIdle: Boolean(tile.revealedByIdle)
     };
   }
   return normalized;
@@ -139,6 +239,7 @@ function normalizeVisitedTiles(data) {
 
 function saveVisitedTiles() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(visitedTiles));
+  localStorage.setItem(WORLDORIA_TILES_KEY, JSON.stringify(visitedTiles));
 }
 
 function loadOsmCache() {
@@ -152,6 +253,54 @@ function loadOsmCache() {
 
 function saveOsmCache() {
   localStorage.setItem(OSM_CACHE_STORAGE_KEY, JSON.stringify(osmCache));
+}
+
+function loadBuildings() {
+  try {
+    return JSON.parse(localStorage.getItem(WORLDORIA_BUILDINGS_KEY)) || {};
+  } catch (error) {
+    console.warn("建物データの読み込みに失敗しました。", error);
+    return {};
+  }
+}
+
+function saveBuildings() {
+  localStorage.setItem(WORLDORIA_BUILDINGS_KEY, JSON.stringify(buildings));
+}
+
+function loadInventory() {
+  try {
+    return { ...DEFAULT_INVENTORY, ...(JSON.parse(localStorage.getItem(WORLDORIA_INVENTORY_KEY)) || {}) };
+  } catch (error) {
+    console.warn("所持品データの読み込みに失敗しました。", error);
+    return { ...DEFAULT_INVENTORY };
+  }
+}
+
+function saveInventory() {
+  localStorage.setItem(WORLDORIA_INVENTORY_KEY, JSON.stringify(inventory));
+}
+
+function loadEventLogs() {
+  try {
+    return JSON.parse(localStorage.getItem(WORLDORIA_EVENT_LOGS_KEY)) || [];
+  } catch (error) {
+    console.warn("イベントログの読み込みに失敗しました。", error);
+    return [];
+  }
+}
+
+function saveEventLogs() {
+  localStorage.setItem(WORLDORIA_EVENT_LOGS_KEY, JSON.stringify(eventLogs.slice(-80)));
+}
+
+function saveLastActiveAt(timestamp = Date.now()) {
+  localStorage.setItem(WORLDORIA_LAST_ACTIVE_KEY, String(timestamp));
+}
+
+function saveLastKnownGrid(gridId) {
+  lastKnownGridId = gridId;
+  localStorage.setItem("worldoriaLastGridId", gridId);
 }
 
 // ===== GPSとグリッド変換 =====
@@ -257,6 +406,309 @@ function stopWatchingPosition() {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
     setStatus("GPS探索を停止しました");
+  }
+}
+
+// ===== 滞在・建物生成 =====
+function getBuildingSpawnStayMs() {
+  return debugMode ? DEBUG_BUILDING_SPAWN_STAY_MS : BUILDING_SPAWN_STAY_MS;
+}
+
+function ensureTile(gridId, now = Date.now()) {
+  if (visitedTiles[gridId]) return visitedTiles[gridId];
+
+  visitedTiles[gridId] = {
+    visitCount: 1,
+    firstVisitedAt: now,
+    lastVisitedAt: now,
+    placeName: generatePlaceName(gridId),
+    stayTimeMs: 0,
+    lastStayStartedAt: null,
+    building: null,
+    revealedByIdle: true
+  };
+  return visitedTiles[gridId];
+}
+
+function updateStayTracking(grid, now = Date.now(), forceAccumulate = false) {
+  if (!stayGridId) {
+    stayGridId = grid.id;
+    stayStartedAt = now;
+    ensureTile(grid.id, now).lastStayStartedAt = now;
+    return;
+  }
+
+  if (stayGridId !== grid.id) {
+    addStayTime(stayGridId, now - stayStartedAt);
+    stayGridId = grid.id;
+    stayStartedAt = now;
+    ensureTile(grid.id, now).lastStayStartedAt = now;
+    return;
+  }
+
+  if (forceAccumulate) {
+    addStayTime(stayGridId, now - stayStartedAt);
+    stayStartedAt = now;
+    ensureTile(stayGridId, now).lastStayStartedAt = now;
+  }
+}
+
+function addStayTime(gridId, deltaMs) {
+  if (deltaMs <= 0) return;
+
+  const tile = ensureTile(gridId);
+  tile.stayTimeMs = (Number(tile.stayTimeMs) || 0) + deltaMs;
+  maybeSpawnBuilding(gridId);
+  saveVisitedTiles();
+}
+
+function getCurrentStayTime(gridId) {
+  const tile = visitedTiles[gridId];
+  const base = tile ? Number(tile.stayTimeMs) || 0 : 0;
+  if (stayGridId === gridId) {
+    return base + Math.max(0, Date.now() - stayStartedAt);
+  }
+  return base;
+}
+
+function maybeSpawnBuilding(gridId) {
+  const tile = visitedTiles[gridId];
+  if (!tile || tile.building || buildings[gridId]) return;
+  if ((Number(tile.stayTimeMs) || 0) < getBuildingSpawnStayMs()) return;
+
+  const building = createRandomBuilding(gridId);
+  attachBuildingToGrid(gridId, building);
+  addEventLog(`${tile.placeName} に ${building.name} が生まれました。`);
+}
+
+function createRandomBuilding(gridId) {
+  const type = BUILDING_TYPES[hashString(`${gridId}:${Date.now()}`) % BUILDING_TYPES.length];
+  return {
+    ...type,
+    createdAt: Date.now(),
+    gridId
+  };
+}
+
+function attachBuildingToGrid(gridId, building) {
+  const tile = ensureTile(gridId);
+  tile.building = building;
+  buildings[gridId] = building;
+  saveVisitedTiles();
+  saveBuildings();
+}
+
+function setCurrentGridAsHome() {
+  const grid = getCurrentGrid();
+  const now = Date.now();
+  homeGridId = grid.id;
+  localStorage.setItem(WORLDORIA_HOME_GRID_KEY, homeGridId);
+
+  const tile = ensureTile(grid.id, now);
+  tile.visitCount = Math.max(1, tile.visitCount || 0);
+  tile.lastVisitedAt = now;
+  tile.placeName = "旅立ちの故郷";
+  attachBuildingToGrid(grid.id, { ...HOME_BUILDING, createdAt: now, gridId: grid.id });
+  selectedGridId = grid.id;
+  saveLastKnownGrid(grid.id);
+  addEventLog(`${tile.placeName} を自宅に設定しました。`);
+  setStatus("現在地を自宅に設定しました");
+  render();
+}
+
+function addDebugStayTime() {
+  const grid = getCurrentGrid();
+  ensureTile(grid.id);
+  addStayTime(grid.id, BUILDING_SPAWN_STAY_MS);
+  selectedGridId = grid.id;
+  setStatus("現在地の滞在時間を30分加算しました");
+  render();
+}
+
+function syncBuildingsFromTiles() {
+  for (const [gridId, tile] of Object.entries(visitedTiles)) {
+    if (tile.building && !buildings[gridId]) {
+      buildings[gridId] = tile.building;
+    }
+  }
+  for (const [gridId, building] of Object.entries(buildings)) {
+    const tile = ensureTile(gridId);
+    if (!tile.building) tile.building = building;
+  }
+  saveVisitedTiles();
+  saveBuildings();
+}
+
+// ===== 放置システム =====
+function processOfflineEvents() {
+  const now = Date.now();
+  const lastActiveAt = Number(localStorage.getItem(WORLDORIA_LAST_ACTIVE_KEY)) || now;
+  const offlineMs = Math.max(0, now - lastActiveAt);
+  const eventCount = Math.min(Math.floor(offlineMs / IDLE_EVENT_INTERVAL_MS), MAX_IDLE_EVENTS);
+
+  if (eventCount <= 0) {
+    saveLastActiveAt(now);
+    return [];
+  }
+
+  const logs = runIdleEvents(eventCount);
+  saveLastActiveAt(now);
+  if (logs.length > 0) showOfflineLogs(logs);
+  return logs;
+}
+
+function runIdleEvents(eventCount = 1) {
+  const logs = [];
+  for (let i = 0; i < eventCount; i += 1) {
+    const target = findIdleTargetGrid();
+    if (!target) break;
+
+    const log = applyIdleBuildingEffect(target.gridId, target.building);
+    if (log) logs.push(log);
+  }
+
+  if (logs.length > 0) {
+    saveVisitedTiles();
+    saveBuildings();
+    saveInventory();
+    saveEventLogs();
+    render();
+  }
+
+  return logs;
+}
+
+function findIdleTargetGrid() {
+  const candidates = [];
+  if (lastKnownGridId) candidates.push(lastKnownGridId);
+  if (lastKnownGridId) candidates.push(...getNeighborGridIds(lastKnownGridId, 1));
+  if (homeGridId) candidates.push(homeGridId);
+  candidates.push(...Object.keys(buildings));
+
+  for (const gridId of [...new Set(candidates)]) {
+    const building = buildings[gridId] || visitedTiles[gridId]?.building;
+    if (building) return { gridId, building };
+  }
+
+  return null;
+}
+
+function applyIdleBuildingEffect(gridId, building) {
+  const tile = ensureTile(gridId);
+  const name = tile.placeName || generatePlaceName(gridId);
+
+  if (building.effect === "idle_explore") {
+    const revealed = revealNearbyTile(gridId, 1);
+    const log = revealed
+      ? `${building.name}の旅人が周辺を調査し、${directionFromTo(gridId, revealed)}の霧を晴らしました。`
+      : `${building.name}の旅人が${name}の周辺を見回りました。`;
+    addEventLog(log);
+    return log;
+  }
+
+  if (building.effect === "idle_items") {
+    const item = ITEM_TYPES[hashString(`${gridId}:${Date.now()}:${eventLogs.length}`) % ITEM_TYPES.length];
+    const amount = 1 + (hashString(`${item.id}:${Date.now()}`) % 3);
+    inventory[item.id] += amount;
+    const log = `${building.name}で${item.name}を${amount}個入手しました。`;
+    addEventLog(log);
+    return log;
+  }
+
+  if (building.effect === "idle_reveal") {
+    const revealed = revealNearbyTile(gridId, 2);
+    const log = revealed
+      ? `${building.name}が${directionFromTo(gridId, revealed)}の霧を少し晴らしました。`
+      : `${building.name}が遠くの霧を見張っています。`;
+    addEventLog(log);
+    return log;
+  }
+
+  if (building.effect === "idle_knowledge" || building.effect === "home_base") {
+    inventory.knowledge += 1;
+    const log = `${building.name}で探索記録が整理され、知識を1得ました。`;
+    addEventLog(log);
+    return log;
+  }
+
+  return null;
+}
+
+function revealNearbyTile(originGridId, radius) {
+  const candidates = getNeighborGridIds(originGridId, radius).filter((gridId) => !visitedTiles[gridId]);
+  if (candidates.length === 0) return null;
+
+  const chosen = candidates[hashString(`${originGridId}:${Date.now()}:${candidates.length}`) % candidates.length];
+  const now = Date.now();
+  const tile = ensureTile(chosen, now);
+  tile.visitCount = Math.max(1, tile.visitCount || 0);
+  tile.firstVisitedAt = tile.firstVisitedAt || now;
+  tile.lastVisitedAt = now;
+  tile.revealedByIdle = true;
+  return chosen;
+}
+
+function getNeighborGridIds(gridId, radius) {
+  const { x, y } = parseGridId(gridId);
+  const ids = [];
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      if (Math.abs(dx) + Math.abs(dy) > radius) continue;
+      ids.push(createGridId(x + dx, y + dy));
+    }
+  }
+  return ids;
+}
+
+function directionFromTo(fromGridId, toGridId) {
+  const from = parseGridId(fromGridId);
+  const to = parseGridId(toGridId);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "東" : "西";
+  if (dy !== 0) return dy > 0 ? "北" : "南";
+  return "近く";
+}
+
+function addEventLog(message) {
+  const entry = {
+    id: `${Date.now()}_${eventLogs.length}`,
+    message,
+    createdAt: Date.now()
+  };
+  eventLogs.push(entry);
+  eventLogs = eventLogs.slice(-80);
+  saveEventLogs();
+}
+
+function showOfflineLogs(logs) {
+  elements.offlineLogPanel.classList.remove("hidden");
+  elements.offlineLogTitle.textContent = `${logs.length}件の出来事`;
+  elements.offlineLogList.innerHTML = "";
+  for (const log of logs) {
+    const item = document.createElement("li");
+    item.textContent = log;
+    elements.offlineLogList.appendChild(item);
+  }
+}
+
+function hideOfflineLogs() {
+  elements.offlineLogPanel.classList.add("hidden");
+}
+
+function debugBackdateLastActive() {
+  saveLastActiveAt(Date.now() - 1000 * 60 * 60 * 2);
+  setStatus("lastActiveAtを2時間前にしました");
+}
+
+function debugRunIdleEvent() {
+  const logs = runIdleEvents(1);
+  if (logs.length > 0) {
+    showOfflineLogs(logs);
+    setStatus("放置イベントを実行しました");
+  } else {
+    setStatus("放置イベントの起点になる建物がありません");
   }
 }
 
@@ -452,6 +904,7 @@ function createOsmPlaceName(gridId, rpgName) {
 function recordCurrentTile({ force = false } = {}) {
   const now = Date.now();
   const currentGrid = getCurrentGrid();
+  updateStayTracking(currentGrid, now);
   const isSameGrid = currentGrid.id === lastRecordedGridId;
   const isCoolingDown = now - lastRecordedAt < VISIT_COOLDOWN_MS;
 
@@ -463,15 +916,20 @@ function recordCurrentTile({ force = false } = {}) {
 
   const existing = visitedTiles[currentGrid.id];
   visitedTiles[currentGrid.id] = {
+    ...(existing || {}),
     visitCount: existing ? existing.visitCount + 1 : 1,
     firstVisitedAt: existing ? existing.firstVisitedAt : now,
     lastVisitedAt: now,
-    placeName: existing ? existing.placeName : generatePlaceName(currentGrid.id)
+    placeName: existing ? existing.placeName : generatePlaceName(currentGrid.id),
+    stayTimeMs: existing ? Number(existing.stayTimeMs) || 0 : 0,
+    lastStayStartedAt: existing ? existing.lastStayStartedAt : now,
+    building: existing ? existing.building : null
   };
 
   lastRecordedGridId = currentGrid.id;
   lastRecordedAt = now;
   selectedGridId = currentGrid.id;
+  saveLastKnownGrid(currentGrid.id);
   saveVisitedTiles();
   setStatus(`${visitedTiles[currentGrid.id].placeName} を開拓しました`);
   render();
@@ -484,15 +942,28 @@ function resetVisitedTiles() {
   if (!ok) return;
 
   visitedTiles = {};
+  buildings = {};
+  inventory = { ...DEFAULT_INVENTORY };
+  homeGridId = null;
+  eventLogs = [];
   selectedGridId = null;
   lastRecordedGridId = null;
   lastRecordedAt = 0;
+  lastKnownGridId = null;
+  stayGridId = null;
+  stayStartedAt = Date.now();
   currentOsmGridId = null;
   currentOsmResult = null;
   currentOsmStatus = "未取得";
   osmCache = {};
   saveVisitedTiles();
+  saveBuildings();
+  saveInventory();
+  saveEventLogs();
   saveOsmCache();
+  localStorage.removeItem(WORLDORIA_HOME_GRID_KEY);
+  localStorage.removeItem("worldoriaLastGridId");
+  saveLastActiveAt();
   setStatus("世界は再び霧に包まれました");
   render();
 }
@@ -563,11 +1034,20 @@ function formatTileInfo(gridId) {
   const level = getTileLevel(tile.visitCount);
   const connections = getConnectionClasses(x, y).length;
   const osmText = tile.osmCategory && tile.osmCategory !== "none" ? ` / 周辺特徴 ${tile.osmCategoryLabel} → ${tile.osmRpgName}` : "";
-  return `${tile.placeName} / ${level.name}${osmText} / 訪問 ${tile.visitCount} / 道の接続 ${connections} / 最終 ${formatTime(tile.lastVisitedAt)}`;
+  const buildingText = tile.building ? ` / 建物 ${tile.building.symbol}${tile.building.name}` : "";
+  return `${tile.placeName} / ${level.name}${osmText}${buildingText} / 滞在 ${formatDuration(getCurrentStayTime(gridId))} / 訪問 ${tile.visitCount} / 道の接続 ${connections} / 最終 ${formatTime(tile.lastVisitedAt)}`;
 }
 
 function formatTime(timestamp) {
   return new Date(timestamp).toLocaleString();
+}
+
+function formatDuration(ms) {
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}時間${minutes}分`;
+  return `${minutes}分`;
 }
 
 // ===== 描画 =====
@@ -588,10 +1068,48 @@ function render() {
   elements.totalVisitsText.textContent = String(stats.totalVisits);
   elements.bestTownText.textContent = stats.bestTown;
   elements.currentPlaceText.textContent = currentTile ? currentTile.placeName : "名もなき霧の中";
+  renderCurrentTilePanel(currentGrid);
+  renderInventory();
+  renderEventLogList();
   renderOsmPanel(currentGrid);
 
   renderMap(currentGrid);
   renderSelectedTile(currentGrid);
+}
+
+function renderCurrentTilePanel(currentGrid) {
+  const tile = visitedTiles[currentGrid.id];
+  const building = tile?.building || buildings[currentGrid.id] || null;
+  elements.stayTimeText.textContent = formatDuration(getCurrentStayTime(currentGrid.id));
+  elements.buildingText.textContent = building ? `${building.symbol} ${building.name}` : "なし";
+  elements.buildingEffectText.textContent = building ? `${building.effect}` : "--";
+}
+
+function renderInventory() {
+  elements.inventoryText.textContent = [
+    `${ITEM_TYPES[0].name}: ${inventory.wood}`,
+    `${ITEM_TYPES[1].name}: ${inventory.stone}`,
+    `${ITEM_TYPES[2].name}: ${inventory.herb}`,
+    `${ITEM_TYPES[3].name}: ${inventory.coin}`,
+    `知識: ${inventory.knowledge}`
+  ].join(" / ");
+}
+
+function renderEventLogList() {
+  elements.eventLogList.innerHTML = "";
+  const logs = eventLogs.slice(-30).reverse();
+  if (logs.length === 0) {
+    const item = document.createElement("li");
+    item.textContent = "まだ出来事はありません。";
+    elements.eventLogList.appendChild(item);
+    return;
+  }
+
+  for (const log of logs) {
+    const item = document.createElement("li");
+    item.textContent = `${formatTime(log.createdAt)} / ${log.message}`;
+    elements.eventLogList.appendChild(item);
+  }
 }
 
 function renderOsmPanel(currentGrid) {
@@ -645,8 +1163,9 @@ function renderMap(currentGrid) {
       if (tileData) {
         const level = getTileLevel(tileData.visitCount);
         const osmClass = tileData.osmCategory && tileData.osmCategory !== "none" ? `osm-${tileData.osmCategory}` : "";
-        tileButton.className = ["tile", level.className, osmClass, ...getConnectionClasses(x, y)].filter(Boolean).join(" ");
-        tileButton.textContent = OSM_SYMBOLS[tileData.osmCategory] || level.symbol;
+        const buildingClass = tileData.building ? "has-building" : "";
+        tileButton.className = ["tile", level.className, osmClass, buildingClass, ...getConnectionClasses(x, y)].filter(Boolean).join(" ");
+        tileButton.textContent = tileData.building ? tileData.building.symbol : OSM_SYMBOLS[tileData.osmCategory] || level.symbol;
         tileButton.dataset.count = tileData.visitCount > 0 ? tileData.visitCount : "";
       } else {
         // 未探索マスは霧。現在地の近くのみ少し薄くして、次に進みたくなる余白を作ります。
@@ -689,6 +1208,11 @@ function moveDebugGrid(dx, dy) {
 // ===== イベント =====
 elements.recordButton.addEventListener("click", () => recordCurrentTile({ force: true }));
 elements.boostButton.addEventListener("click", () => recordCurrentTile({ force: true }));
+elements.setHomeButton.addEventListener("click", setCurrentGridAsHome);
+elements.debugStayButton.addEventListener("click", addDebugStayTime);
+elements.debugIdleButton.addEventListener("click", debugRunIdleEvent);
+elements.debugBackdateButton.addEventListener("click", debugBackdateLastActive);
+elements.closeOfflineLogButton.addEventListener("click", hideOfflineLogs);
 elements.resetButton.addEventListener("click", resetVisitedTiles);
 
 elements.moveUpButton.addEventListener("click", () => moveDebugGrid(0, 1));
@@ -702,7 +1226,20 @@ elements.debugModeToggle.addEventListener("change", () => {
   render();
 });
 
+window.addEventListener("beforeunload", () => {
+  updateStayTracking(getCurrentGrid(), Date.now(), true);
+  saveLastActiveAt();
+});
+
 // 初期表示ではGPS未取得なら疑似座標を中心にマップを出し、すぐ触れる状態にします。
+syncBuildingsFromTiles();
+processOfflineEvents();
 render();
 // GPSはボタン操作なしで同期開始します。許可されない環境では疑似移動だけで遊べます。
 startWatchingPosition();
+
+setInterval(() => {
+  updateStayTracking(getCurrentGrid(), Date.now(), true);
+  saveLastActiveAt();
+  render();
+}, STAY_TICK_MS);

@@ -52,6 +52,21 @@
         <div id="selectedTileText">霧の向こうをタップしてください</div>
       </section>
 
+      <section class="current-tile-panel">
+        <div>
+          <span class="label">滞在時間</span>
+          <strong id="stayTimeText">0分</strong>
+        </div>
+        <div>
+          <span class="label">建物</span>
+          <strong id="buildingText">なし</strong>
+        </div>
+        <div>
+          <span class="label">効果</span>
+          <strong id="buildingEffectText">--</strong>
+        </div>
+      </section>
+
       <section class="osm-panel">
         <div class="osm-panel-header">
           <div>
@@ -90,7 +105,27 @@
       <section class="controls">
         <button id="recordButton" type="button">現在地を記録</button>
         <button id="boostButton" type="button">現在地を育てる +1</button>
+        <button id="setHomeButton" type="button">現在地を自宅に設定</button>
+        <button id="debugStayButton" type="button">滞在時間 +30分</button>
+        <button id="debugIdleButton" type="button">放置イベント実行</button>
+        <button id="debugBackdateButton" type="button">2時間前にする</button>
         <button id="resetButton" class="danger" type="button">世界をリセット</button>
+      </section>
+
+      <section class="inventory-panel">
+        <span class="label">所持品</span>
+        <div id="inventoryText">木材: 0 / 石材: 0 / 薬草: 0 / 古銭: 0 / 知識: 0</div>
+      </section>
+
+      <section id="offlineLogPanel" class="offline-log-panel hidden">
+        <div class="offline-log-header">
+          <div>
+            <span class="label">不在中の出来事</span>
+            <strong id="offlineLogTitle">世界が少し動きました</strong>
+          </div>
+          <button id="closeOfflineLogButton" type="button">閉じる</button>
+        </div>
+        <ul id="offlineLogList"></ul>
       </section>
 
       <section class="move-pad" aria-label="疑似移動">
@@ -131,6 +166,10 @@
         <details class="osm-debug">
           <summary>OSM要素一覧</summary>
           <ol id="osmFeatureList"></ol>
+        </details>
+        <details class="osm-debug">
+          <summary>イベントログ</summary>
+          <ol id="eventLogList"></ol>
         </details>
       </details>
     </main>

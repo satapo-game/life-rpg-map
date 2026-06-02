@@ -67,8 +67,11 @@ h1 {
 .world-stats,
 .map-frame,
 .tile-info,
+.current-tile-panel,
 .osm-panel,
 .controls,
+.inventory-panel,
+.offline-log-panel,
 .move-pad,
 .debug-panel {
   border: 2px solid var(--line);
@@ -264,6 +267,12 @@ dd,
     #7c6530;
 }
 
+.tile.has-building {
+  font-size: clamp(0.78rem, 3.6vw, 1.15rem);
+  color: #fff7d5;
+  text-shadow: 0 1px 0 #111, 0 0 8px rgba(255, 242, 168, 0.45);
+}
+
 .tile.osm-station {
   background:
     linear-gradient(90deg, transparent 0 20%, #d7c28a 21% 79%, transparent 80%),
@@ -335,6 +344,21 @@ dd,
   padding: 10px;
 }
 
+.current-tile-panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: var(--line);
+}
+
+.current-tile-panel > div {
+  min-width: 0;
+  padding: 9px 8px;
+  background: var(--panel);
+}
+
 .osm-panel {
   margin-bottom: 12px;
   overflow: hidden;
@@ -394,6 +418,50 @@ dd,
   grid-column: 1 / -1;
   border-color: #884c42;
   color: #ffd8cf;
+}
+
+.inventory-panel {
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.inventory-panel div {
+  overflow-wrap: anywhere;
+}
+
+.offline-log-panel {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: #282315;
+}
+
+.offline-log-panel.hidden {
+  display: none;
+}
+
+.offline-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.offline-log-header button {
+  min-height: 38px;
+  border: 2px solid #665b43;
+  background: #2a261d;
+  color: var(--ink);
+}
+
+.offline-log-panel ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.offline-log-panel li {
+  overflow-wrap: anywhere;
 }
 
 .move-pad {
@@ -495,6 +563,7 @@ dd,
 @media (max-width: 380px) {
   .hero,
   .world-stats,
+  .current-tile-panel,
   .osm-panel-header,
   .osm-summary,
   .controls,
