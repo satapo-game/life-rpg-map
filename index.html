@@ -3,175 +3,194 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Life World RPG Map Prototype</title>
+    <title>Worldoria</title>
     <link rel="stylesheet" href="./style.css">
   </head>
   <body>
     <main class="app-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">MIST FRONTIER</p>
-          <h1>人生RPGマップ</h1>
-        </div>
-        <div class="current-place">
-          <span class="label">現在地</span>
-          <strong id="currentPlaceText">名もなき霧の中</strong>
-        </div>
-      </header>
+      <button id="notificationBar" class="notification-bar" type="button">
+        <span id="statusText">Worldoria</span>
+        <span id="sourceText" class="gps-pill">--</span>
+      </button>
 
-      <section class="world-stats" aria-live="polite">
-        <div>
-          <span class="label">探索マス</span>
-          <strong id="exploredCountText">0</strong>
-        </div>
-        <div>
-          <span class="label">総訪問</span>
-          <strong id="totalVisitsText">0</strong>
-        </div>
-        <div>
-          <span class="label">最も育った街</span>
-          <strong id="bestTownText">未発見</strong>
-        </div>
-      </section>
-
-      <section class="map-frame" aria-label="霧に包まれたRPGワールドマップ">
-        <div class="map-header">
-          <span id="statusText">霧の境界に立っています</span>
-          <span id="sourceText">疑似座標</span>
-        </div>
-        <div class="viewport-mask">
-          <div id="gridMap" class="grid-map"></div>
-          <div class="player-marker" aria-hidden="true">
-            <span>勇</span>
+      <section id="mapTab" class="tab-view active" data-tab-panel="map">
+        <section class="map-frame" aria-label="霧に包まれたRPGワールドマップ">
+          <div class="viewport-mask">
+            <div id="gridMap" class="grid-map"></div>
+            <div class="player-marker" aria-hidden="true">
+              <span>勇</span>
+            </div>
           </div>
-        </div>
+        </section>
       </section>
 
-      <section class="tile-info">
-        <span class="label">見つめているマス</span>
+      <section id="logTab" class="tab-view" data-tab-panel="log">
+        <header class="tab-header">
+          <h1>LOG</h1>
+          <p>世界が動いた記録</p>
+        </header>
+        <section id="offlineLogPanel" class="offline-log-panel hidden">
+          <div class="offline-log-header">
+            <div>
+              <span class="label">不在中の出来事</span>
+              <strong id="offlineLogTitle">世界が少し動きました</strong>
+            </div>
+            <button id="closeOfflineLogButton" type="button">閉じる</button>
+          </div>
+          <ul id="offlineLogList"></ul>
+        </section>
+        <ol id="eventLogList" class="log-list"></ol>
+      </section>
+
+      <section id="bagTab" class="tab-view" data-tab-panel="bag">
+        <header class="tab-header">
+          <h1>BAG</h1>
+          <p>不在中に集まったもの</p>
+        </header>
+        <section class="inventory-panel">
+          <div id="inventoryText">木材: 0 / 石材: 0 / 薬草: 0 / 古銭: 0 / 知識: 0</div>
+        </section>
+      </section>
+
+      <section id="settingTab" class="tab-view" data-tab-panel="setting">
+        <header class="tab-header">
+          <h1>SETTING</h1>
+          <p>同期・自宅・デバッグ</p>
+        </header>
+
+        <section class="controls">
+          <button id="startButton" type="button">GPS開始</button>
+          <button id="stopButton" type="button">GPS停止</button>
+          <button id="recordButton" type="button">現在地を記録</button>
+          <button id="boostButton" type="button">現在地を育てる +1</button>
+          <button id="setHomeButton" type="button">現在地を自宅に設定</button>
+          <button id="debugStayButton" type="button">滞在時間 +30分</button>
+          <button id="debugIdleButton" type="button">放置イベント実行</button>
+          <button id="debugBackdateButton" type="button">2時間前にする</button>
+          <button id="resetButton" class="danger" type="button">世界をリセット</button>
+        </section>
+
+        <section class="move-pad" aria-label="疑似移動">
+          <button id="moveUpButton" type="button" aria-label="北へ移動">↑</button>
+          <button id="moveLeftButton" type="button" aria-label="西へ移動">←</button>
+          <button id="moveDownButton" type="button" aria-label="南へ移動">↓</button>
+          <button id="moveRightButton" type="button" aria-label="東へ移動">→</button>
+        </section>
+
+        <details class="debug-panel">
+          <summary>デバッグ表示</summary>
+          <label class="debug-toggle">
+            <input id="debugModeToggle" type="checkbox">
+            <span>疑似座標モード</span>
+          </label>
+          <dl>
+            <div>
+              <dt>緯度</dt>
+              <dd id="latText">--</dd>
+            </div>
+            <div>
+              <dt>経度</dt>
+              <dd id="lngText">--</dd>
+            </div>
+            <div>
+              <dt>精度</dt>
+              <dd id="accuracyText">--</dd>
+            </div>
+            <div>
+              <dt>更新</dt>
+              <dd id="updatedText">--</dd>
+            </div>
+            <div>
+              <dt>現在グリッド</dt>
+              <dd id="gridText">--</dd>
+            </div>
+            <div>
+              <dt>探索マス</dt>
+              <dd id="exploredCountText">0</dd>
+            </div>
+            <div>
+              <dt>総訪問</dt>
+              <dd id="totalVisitsText">0</dd>
+            </div>
+            <div>
+              <dt>最も育った街</dt>
+              <dd id="bestTownText">未発見</dd>
+            </div>
+            <div>
+              <dt>現在地名</dt>
+              <dd id="currentPlaceText">名もなき霧の中</dd>
+            </div>
+          </dl>
+
+          <section class="current-tile-panel">
+            <div>
+              <span class="label">滞在時間</span>
+              <strong id="stayTimeText">0分</strong>
+            </div>
+            <div>
+              <span class="label">建物</span>
+              <strong id="buildingText">なし</strong>
+            </div>
+            <div>
+              <span class="label">効果</span>
+              <strong id="buildingEffectText">--</strong>
+            </div>
+          </section>
+
+          <section class="osm-panel">
+            <div class="osm-panel-header">
+              <div>
+                <span class="label">周辺情報</span>
+                <strong id="osmStatusText">未取得</strong>
+              </div>
+              <div>
+                <span class="label">周辺特徴</span>
+                <strong id="osmFeatureText">未判定</strong>
+              </div>
+            </div>
+            <dl class="osm-summary">
+              <div>
+                <dt>公園</dt>
+                <dd id="osmParkText">0</dd>
+              </div>
+              <div>
+                <dt>駅</dt>
+                <dd id="osmStationText">0</dd>
+              </div>
+              <div>
+                <dt>神社・寺</dt>
+                <dd id="osmWorshipText">0</dd>
+              </div>
+              <div>
+                <dt>川・水辺</dt>
+                <dd id="osmWaterText">0</dd>
+              </div>
+              <div>
+                <dt>店・飲食店</dt>
+                <dd id="osmCommercialText">0</dd>
+              </div>
+            </dl>
+          </section>
+
+          <details class="osm-debug">
+            <summary>OSM要素一覧</summary>
+            <ol id="osmFeatureList"></ol>
+          </details>
+        </details>
+      </section>
+
+      <section id="tileDetailSheet" class="tile-detail-sheet hidden" aria-live="polite">
+        <button id="closeTileDetailButton" class="sheet-close" type="button">×</button>
+        <span class="label">この土地</span>
         <div id="selectedTileText">霧の向こうをタップしてください</div>
       </section>
 
-      <section class="current-tile-panel">
-        <div>
-          <span class="label">滞在時間</span>
-          <strong id="stayTimeText">0分</strong>
-        </div>
-        <div>
-          <span class="label">建物</span>
-          <strong id="buildingText">なし</strong>
-        </div>
-        <div>
-          <span class="label">効果</span>
-          <strong id="buildingEffectText">--</strong>
-        </div>
-      </section>
-
-      <section class="osm-panel">
-        <div class="osm-panel-header">
-          <div>
-            <span class="label">周辺情報</span>
-            <strong id="osmStatusText">未取得</strong>
-          </div>
-          <div>
-            <span class="label">周辺特徴</span>
-            <strong id="osmFeatureText">未判定</strong>
-          </div>
-        </div>
-        <dl class="osm-summary">
-          <div>
-            <dt>公園</dt>
-            <dd id="osmParkText">0</dd>
-          </div>
-          <div>
-            <dt>駅</dt>
-            <dd id="osmStationText">0</dd>
-          </div>
-          <div>
-            <dt>神社・寺</dt>
-            <dd id="osmWorshipText">0</dd>
-          </div>
-          <div>
-            <dt>川・水辺</dt>
-            <dd id="osmWaterText">0</dd>
-          </div>
-          <div>
-            <dt>店・飲食店</dt>
-            <dd id="osmCommercialText">0</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="controls">
-        <button id="recordButton" type="button">現在地を記録</button>
-        <button id="boostButton" type="button">現在地を育てる +1</button>
-        <button id="setHomeButton" type="button">現在地を自宅に設定</button>
-        <button id="debugStayButton" type="button">滞在時間 +30分</button>
-        <button id="debugIdleButton" type="button">放置イベント実行</button>
-        <button id="debugBackdateButton" type="button">2時間前にする</button>
-        <button id="resetButton" class="danger" type="button">世界をリセット</button>
-      </section>
-
-      <section class="inventory-panel">
-        <span class="label">所持品</span>
-        <div id="inventoryText">木材: 0 / 石材: 0 / 薬草: 0 / 古銭: 0 / 知識: 0</div>
-      </section>
-
-      <section id="offlineLogPanel" class="offline-log-panel hidden">
-        <div class="offline-log-header">
-          <div>
-            <span class="label">不在中の出来事</span>
-            <strong id="offlineLogTitle">世界が少し動きました</strong>
-          </div>
-          <button id="closeOfflineLogButton" type="button">閉じる</button>
-        </div>
-        <ul id="offlineLogList"></ul>
-      </section>
-
-      <section class="move-pad" aria-label="疑似移動">
-        <button id="moveUpButton" type="button" aria-label="北へ移動">↑</button>
-        <button id="moveLeftButton" type="button" aria-label="西へ移動">←</button>
-        <button id="moveDownButton" type="button" aria-label="南へ移動">↓</button>
-        <button id="moveRightButton" type="button" aria-label="東へ移動">→</button>
-      </section>
-
-      <details class="debug-panel">
-        <summary>デバッグ表示</summary>
-        <label class="debug-toggle">
-          <input id="debugModeToggle" type="checkbox">
-          <span>疑似座標モード</span>
-        </label>
-        <dl>
-          <div>
-            <dt>緯度</dt>
-            <dd id="latText">--</dd>
-          </div>
-          <div>
-            <dt>経度</dt>
-            <dd id="lngText">--</dd>
-          </div>
-          <div>
-            <dt>精度</dt>
-            <dd id="accuracyText">--</dd>
-          </div>
-          <div>
-            <dt>更新</dt>
-            <dd id="updatedText">--</dd>
-          </div>
-          <div>
-            <dt>現在グリッド</dt>
-            <dd id="gridText">--</dd>
-          </div>
-        </dl>
-        <details class="osm-debug">
-          <summary>OSM要素一覧</summary>
-          <ol id="osmFeatureList"></ol>
-        </details>
-        <details class="osm-debug">
-          <summary>イベントログ</summary>
-          <ol id="eventLogList"></ol>
-        </details>
-      </details>
+      <nav class="tab-bar" aria-label="メインタブ">
+        <button class="tab-button active" type="button" data-tab="map">🗺<span>MAP</span></button>
+        <button class="tab-button" type="button" data-tab="log">📜<span>LOG</span></button>
+        <button class="tab-button" type="button" data-tab="bag">🎒<span>BAG</span></button>
+        <button class="tab-button" type="button" data-tab="setting">⚙<span>SETTING</span></button>
+      </nav>
     </main>
 
     <script src="./main.js"></script>

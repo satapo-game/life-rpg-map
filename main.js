@@ -139,6 +139,7 @@ const DEFAULT_INVENTORY = {
 
 // ===== DOM参照 =====
 const elements = {
+  notificationBar: document.querySelector("#notificationBar"),
   debugModeToggle: document.querySelector("#debugModeToggle"),
   statusText: document.querySelector("#statusText"),
   sourceText: document.querySelector("#sourceText"),
@@ -161,6 +162,10 @@ const elements = {
   osmFeatureList: document.querySelector("#osmFeatureList"),
   gridMap: document.querySelector("#gridMap"),
   selectedTileText: document.querySelector("#selectedTileText"),
+  tileDetailSheet: document.querySelector("#tileDetailSheet"),
+  closeTileDetailButton: document.querySelector("#closeTileDetailButton"),
+  tabButtons: document.querySelectorAll(".tab-button"),
+  tabViews: document.querySelectorAll(".tab-view"),
   stayTimeText: document.querySelector("#stayTimeText"),
   buildingText: document.querySelector("#buildingText"),
   buildingEffectText: document.querySelector("#buildingEffectText"),
@@ -169,6 +174,8 @@ const elements = {
   offlineLogTitle: document.querySelector("#offlineLogTitle"),
   offlineLogList: document.querySelector("#offlineLogList"),
   eventLogList: document.querySelector("#eventLogList"),
+  startButton: document.querySelector("#startButton"),
+  stopButton: document.querySelector("#stopButton"),
   recordButton: document.querySelector("#recordButton"),
   boostButton: document.querySelector("#boostButton"),
   setHomeButton: document.querySelector("#setHomeButton"),
@@ -691,10 +698,25 @@ function showOfflineLogs(logs) {
     item.textContent = log;
     elements.offlineLogList.appendChild(item);
   }
+  setStatus(`🌙 不在中に${logs.length}件の出来事`);
 }
 
 function hideOfflineLogs() {
   elements.offlineLogPanel.classList.add("hidden");
+}
+
+function switchTab(tabName) {
+  for (const view of elements.tabViews) {
+    view.classList.toggle("active", view.dataset.tabPanel === tabName);
+  }
+
+  for (const button of elements.tabButtons) {
+    button.classList.toggle("active", button.dataset.tab === tabName);
+  }
+
+  if (tabName !== "map") {
+    hideTileDetail();
+  }
 }
 
 function debugBackdateLastActive() {
@@ -710,6 +732,17 @@ function debugRunIdleEvent() {
   } else {
     setStatus("放置イベントの起点になる建物がありません");
   }
+}
+
+function showTileDetail(gridId) {
+  selectedGridId = gridId;
+  elements.selectedTileText.textContent = formatTileInfo(gridId);
+  elements.tileDetailSheet.classList.remove("hidden");
+  renderMap(getCurrentGrid());
+}
+
+function hideTileDetail() {
+  elements.tileDetailSheet.classList.add("hidden");
 }
 
 // ===== OSM / Overpass API =====
@@ -1178,8 +1211,7 @@ function renderMap(currentGrid) {
       if (gridId === selectedGridId) tileButton.classList.add("selected");
 
       tileButton.addEventListener("click", () => {
-        selectedGridId = gridId;
-        render();
+        showTileDetail(gridId);
       });
 
       elements.gridMap.appendChild(tileButton);
@@ -1194,6 +1226,8 @@ function renderSelectedTile(currentGrid) {
 
 function setStatus(message) {
   elements.statusText.textContent = message;
+  const quietMessages = ["Worldoria", "静かな世界", "同じ場所を見渡しています"];
+  elements.notificationBar.classList.toggle("has-notice", !quietMessages.includes(message));
 }
 
 // ===== 疑似移動 =====
@@ -1206,6 +1240,11 @@ function moveDebugGrid(dx, dy) {
 }
 
 // ===== イベント =====
+elements.startButton.addEventListener("click", startWatchingPosition);
+elements.stopButton.addEventListener("click", () => {
+  stopWatchingPosition();
+  render();
+});
 elements.recordButton.addEventListener("click", () => recordCurrentTile({ force: true }));
 elements.boostButton.addEventListener("click", () => recordCurrentTile({ force: true }));
 elements.setHomeButton.addEventListener("click", setCurrentGridAsHome);
@@ -1213,6 +1252,11 @@ elements.debugStayButton.addEventListener("click", addDebugStayTime);
 elements.debugIdleButton.addEventListener("click", debugRunIdleEvent);
 elements.debugBackdateButton.addEventListener("click", debugBackdateLastActive);
 elements.closeOfflineLogButton.addEventListener("click", hideOfflineLogs);
+elements.closeTileDetailButton.addEventListener("click", hideTileDetail);
+elements.notificationBar.addEventListener("click", () => switchTab("log"));
+for (const button of elements.tabButtons) {
+  button.addEventListener("click", () => switchTab(button.dataset.tab));
+}
 elements.resetButton.addEventListener("click", resetVisitedTiles);
 
 elements.moveUpButton.addEventListener("click", () => moveDebugGrid(0, 1));
