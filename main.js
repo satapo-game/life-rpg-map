@@ -3,7 +3,8 @@
 // ===== 調整しやすいプロトタイプ定数 =====
 const GRID_SIZE = 0.001; // 約100m前後。値を大きくすると1マスが広くなります。
 const VISIT_COOLDOWN_MS = 30000; // GPS更新による同一マスの加算は30秒に1回まで。
-const MAP_RADIUS = 5; // 5なら現在地中心の11x11マップ。
+const MAP_RADIUS_X = 5; // 5なら横11マス。
+const MAP_RADIUS_Y = 8; // 8なら縦17マス。スマホ縦画面の余白をマップに使います。
 const STORAGE_KEY = "lifeRpgMap.visitedTiles.v2";
 const LEGACY_STORAGE_KEY = "lifeRpgMap.visitedTiles.v1";
 const OSM_CACHE_STORAGE_KEY = "lifeRpgMap.osmCache.v1";
@@ -777,7 +778,7 @@ function handleMapPointerEnd(event) {
   const dy = event.clientY - mapDragStart.y;
   mapDragStart = null;
 
-  const tileStep = Math.max(28, elements.viewportMask.clientWidth / (MAP_RADIUS * 2 + 1));
+  const tileStep = Math.max(28, elements.viewportMask.clientWidth / (MAP_RADIUS_X * 2 + 1));
   const moveX = Math.trunc(dx / tileStep);
   const moveY = Math.trunc(dy / tileStep);
 
@@ -1237,8 +1238,8 @@ function renderMap(currentGrid) {
     id: createGridId(currentGrid.x + mapViewOffset.x, currentGrid.y + mapViewOffset.y)
   };
 
-  for (let y = viewCenter.y + MAP_RADIUS; y >= viewCenter.y - MAP_RADIUS; y -= 1) {
-    for (let x = viewCenter.x - MAP_RADIUS; x <= viewCenter.x + MAP_RADIUS; x += 1) {
+  for (let y = viewCenter.y + MAP_RADIUS_Y; y >= viewCenter.y - MAP_RADIUS_Y; y -= 1) {
+    for (let x = viewCenter.x - MAP_RADIUS_X; x <= viewCenter.x + MAP_RADIUS_X; x += 1) {
       const gridId = createGridId(x, y);
       const tileData = visitedTiles[gridId];
       const distance = Math.abs(x - currentGrid.x) + Math.abs(y - currentGrid.y);
