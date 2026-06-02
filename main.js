@@ -1253,12 +1253,12 @@ function renderMap(currentGrid) {
         const osmClass = tileData.osmCategory && tileData.osmCategory !== "none" ? `osm-${tileData.osmCategory}` : "";
         const buildingClass = tileData.building ? "has-building" : "";
         tileButton.className = ["tile", level.className, osmClass, buildingClass, ...getConnectionClasses(x, y)].filter(Boolean).join(" ");
-        tileButton.textContent = tileData.building ? tileData.building.symbol : OSM_SYMBOLS[tileData.osmCategory] || level.symbol;
+        tileButton.appendChild(createTileContent(tileData.building ? tileData.building.symbol : OSM_SYMBOLS[tileData.osmCategory] || level.symbol, tileData.building ? "building-symbol" : "tile-label"));
         tileButton.dataset.count = tileData.visitCount > 0 ? tileData.visitCount : "";
       } else {
         // 未探索マスは霧。現在地の近くのみ少し薄くして、次に進みたくなる余白を作ります。
         tileButton.className = `tile ${distance <= 1 ? "fog-near" : "fog-far"}`;
-        tileButton.textContent = distance <= 1 ? "???" : "■■";
+        tileButton.appendChild(createTileContent(distance <= 1 ? "???" : "■■", "tile-label"));
         tileButton.dataset.count = "";
       }
 
@@ -1272,6 +1272,13 @@ function renderMap(currentGrid) {
       elements.gridMap.appendChild(tileButton);
     }
   }
+}
+
+function createTileContent(text, className) {
+  const content = document.createElement("span");
+  content.className = className;
+  content.textContent = text;
+  return content;
 }
 
 function renderSelectedTile(currentGrid) {
