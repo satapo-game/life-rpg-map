@@ -99,6 +99,7 @@ button {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  touch-action: none;
   background:
     linear-gradient(0deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
@@ -443,6 +444,28 @@ dd {
   gap: 8px;
   margin-bottom: 10px;
   padding: 8px;
+}
+
+.map-debug-pad {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 6;
+  width: min(58%, 260px);
+  margin: 0;
+  transform: translateX(-50%);
+  border-color: rgba(240, 192, 77, 0.36);
+  background: rgba(14, 14, 10, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.map-debug-pad.hidden {
+  display: none;
+}
+
+.map-debug-pad button {
+  min-height: 40px;
+  background: rgba(42, 38, 29, 0.86);
 }
 
 #moveUpButton {

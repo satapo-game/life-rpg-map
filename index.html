@@ -20,6 +20,12 @@
             <div class="player-marker" aria-hidden="true">
               <span>勇</span>
             </div>
+            <section id="mapDebugMovePad" class="move-pad map-debug-pad hidden" aria-label="疑似移動">
+              <button id="moveUpButton" type="button" aria-label="北へ移動">↑</button>
+              <button id="moveLeftButton" type="button" aria-label="西へ移動">←</button>
+              <button id="moveDownButton" type="button" aria-label="南へ移動">↓</button>
+              <button id="moveRightButton" type="button" aria-label="東へ移動">→</button>
+            </section>
           </div>
         </section>
       </section>
@@ -70,18 +76,15 @@
           <button id="resetButton" class="danger" type="button">世界をリセット</button>
         </section>
 
-        <section class="move-pad" aria-label="疑似移動">
-          <button id="moveUpButton" type="button" aria-label="北へ移動">↑</button>
-          <button id="moveLeftButton" type="button" aria-label="西へ移動">←</button>
-          <button id="moveDownButton" type="button" aria-label="南へ移動">↓</button>
-          <button id="moveRightButton" type="button" aria-label="東へ移動">→</button>
-        </section>
-
         <details class="debug-panel">
           <summary>デバッグ表示</summary>
           <label class="debug-toggle">
             <input id="debugModeToggle" type="checkbox">
             <span>疑似座標モード</span>
+          </label>
+          <label class="debug-toggle">
+            <input id="debugMovePadToggle" type="checkbox">
+            <span>MAPに十字キーを表示</span>
           </label>
           <dl>
             <div>

@@ -141,6 +141,7 @@ const DEFAULT_INVENTORY = {
 const elements = {
   notificationBar: document.querySelector("#notificationBar"),
   debugModeToggle: document.querySelector("#debugModeToggle"),
+  debugMovePadToggle: document.querySelector("#debugMovePadToggle"),
   statusText: document.querySelector("#statusText"),
   sourceText: document.querySelector("#sourceText"),
   gridText: document.querySelector("#gridText"),
@@ -161,6 +162,8 @@ const elements = {
   osmCommercialText: document.querySelector("#osmCommercialText"),
   osmFeatureList: document.querySelector("#osmFeatureList"),
   gridMap: document.querySelector("#gridMap"),
+  viewportMask: document.querySelector(".viewport-mask"),
+  mapDebugMovePad: document.querySelector("#mapDebugMovePad"),
   selectedTileText: document.querySelector("#selectedTileText"),
   tileDetailSheet: document.querySelector("#tileDetailSheet"),
   closeTileDetailButton: document.querySelector("#closeTileDetailButton"),
@@ -207,6 +210,9 @@ let lastRecordedAt = 0;
 let lastKnownGridId = localStorage.getItem("worldoriaLastGridId") || null;
 let stayGridId = null;
 let stayStartedAt = Date.now();
+let showDebugMovePad = localStorage.getItem("worldoriaShowDebugMovePad") === "true";
+let mapViewOffset = { x: 0, y: 0 };
+let mapDragStart = null;
 let currentOsmGridId = null;
 let currentOsmResult = null;
 let currentOsmStatus = "未取得";
@@ -745,6 +751,48 @@ function hideTileDetail() {
   elements.tileDetailSheet.classList.add("hidden");
 }
 
+function resetMapViewOffset() {
+  mapViewOffset = { x: 0, y: 0 };
+}
+
+function panMapBy(dx, dy) {
+  mapViewOffset.x += dx;
+  mapViewOffset.y += dy;
+  hideTileDetail();
+  render();
+}
+
+function handleMapPointerStart(event) {
+  mapDragStart = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY
+  };
+}
+
+function handleMapPointerEnd(event) {
+  if (!mapDragStart || mapDragStart.pointerId !== event.pointerId) return;
+
+  const dx = event.clientX - mapDragStart.x;
+  const dy = event.clientY - mapDragStart.y;
+  mapDragStart = null;
+
+  const tileStep = Math.max(28, elements.viewportMask.clientWidth / (MAP_RADIUS * 2 + 1));
+  const moveX = Math.trunc(dx / tileStep);
+  const moveY = Math.trunc(dy / tileStep);
+
+  if (moveX === 0 && moveY === 0) return;
+
+  // 指を右へ動かすと西側を、上へ動かすと南側を見るように地図中心をずらします。
+  panMapBy(-moveX, moveY);
+}
+
+function toggleDebugMovePad() {
+  showDebugMovePad = elements.debugMovePadToggle.checked;
+  localStorage.setItem("worldoriaShowDebugMovePad", String(showDebugMovePad));
+  render();
+}
+
 // ===== OSM / Overpass API =====
 async function ensureOsmForGrid(grid) {
   if (currentOsmGridId === grid.id && currentOsmStatus !== "未取得") {
@@ -1091,6 +1139,8 @@ function render() {
   const stats = getWorldStats();
 
   elements.debugModeToggle.checked = debugMode;
+  elements.debugMovePadToggle.checked = showDebugMovePad;
+  elements.mapDebugMovePad.classList.toggle("hidden", !showDebugMovePad);
   elements.sourceText.textContent = currentGrid.source === "gps" ? "GPS探索" : "疑似探索";
   elements.gridText.textContent = currentGrid.id;
   elements.latText.textContent = readout.latitude;
@@ -1181,9 +1231,14 @@ function renderOsmFeatureList(result) {
 
 function renderMap(currentGrid) {
   elements.gridMap.innerHTML = "";
+  const viewCenter = {
+    x: currentGrid.x + mapViewOffset.x,
+    y: currentGrid.y + mapViewOffset.y,
+    id: createGridId(currentGrid.x + mapViewOffset.x, currentGrid.y + mapViewOffset.y)
+  };
 
-  for (let y = currentGrid.y + MAP_RADIUS; y >= currentGrid.y - MAP_RADIUS; y -= 1) {
-    for (let x = currentGrid.x - MAP_RADIUS; x <= currentGrid.x + MAP_RADIUS; x += 1) {
+  for (let y = viewCenter.y + MAP_RADIUS; y >= viewCenter.y - MAP_RADIUS; y -= 1) {
+    for (let x = viewCenter.x - MAP_RADIUS; x <= viewCenter.x + MAP_RADIUS; x += 1) {
       const gridId = createGridId(x, y);
       const tileData = visitedTiles[gridId];
       const distance = Math.abs(x - currentGrid.x) + Math.abs(y - currentGrid.y);
@@ -1235,6 +1290,7 @@ function moveDebugGrid(dx, dy) {
   debugMode = true;
   debugGrid.x += dx;
   debugGrid.y += dy;
+  resetMapViewOffset();
   // 矢印移動はテスト用の「歩いた」操作なので、移動先を即座に開拓します。
   recordCurrentTile({ force: true });
 }
@@ -1268,6 +1324,12 @@ elements.debugModeToggle.addEventListener("change", () => {
   debugMode = elements.debugModeToggle.checked;
   setStatus(debugMode ? "疑似座標で霧を進みます" : "GPS座標で探索します");
   render();
+});
+elements.debugMovePadToggle.addEventListener("change", toggleDebugMovePad);
+elements.viewportMask.addEventListener("pointerdown", handleMapPointerStart);
+elements.viewportMask.addEventListener("pointerup", handleMapPointerEnd);
+elements.viewportMask.addEventListener("pointercancel", () => {
+  mapDragStart = null;
 });
 
 window.addEventListener("beforeunload", () => {
