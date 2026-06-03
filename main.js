@@ -77,6 +77,16 @@ const OSM_SYMBOLS = {
   commercial: "市"
 };
 
+const HINT_SYMBOLS = {
+  park: "森",
+  forest: "森",
+  water: "水",
+  station: "宿",
+  commercial: "市",
+  worship: "祠",
+  field: "░"
+};
+
 const BUILDING_TYPES = [
   {
     id: "camp",
@@ -150,6 +160,7 @@ const elements = {
   lngText: document.querySelector("#lngText"),
   accuracyText: document.querySelector("#accuracyText"),
   updatedText: document.querySelector("#updatedText"),
+  headingText: document.querySelector("#headingText"),
   exploredCountText: document.querySelector("#exploredCountText"),
   totalVisitsText: document.querySelector("#totalVisitsText"),
   bestTownText: document.querySelector("#bestTownText"),
@@ -186,6 +197,9 @@ const elements = {
   debugStayButton: document.querySelector("#debugStayButton"),
   debugIdleButton: document.querySelector("#debugIdleButton"),
   debugBackdateButton: document.querySelector("#debugBackdateButton"),
+  enableOrientationButton: document.querySelector("#enableOrientationButton"),
+  rotateHeadingButton: document.querySelector("#rotateHeadingButton"),
+  resetHeadingButton: document.querySelector("#resetHeadingButton"),
   closeOfflineLogButton: document.querySelector("#closeOfflineLogButton"),
   resetButton: document.querySelector("#resetButton"),
   moveUpButton: document.querySelector("#moveUpButton"),
@@ -203,6 +217,9 @@ let homeGridId = localStorage.getItem(WORLDORIA_HOME_GRID_KEY) || null;
 let eventLogs = loadEventLogs();
 let watchId = null;
 let gpsPosition = null;
+let previousGpsPosition = null;
+let headingDeg = Number(localStorage.getItem("worldoriaHeadingDeg")) || 0;
+let orientationSensorEnabled = false;
 let debugMode = false;
 let debugGrid = { ...DEBUG_START_GRID };
 let selectedGridId = null;
@@ -376,6 +393,97 @@ function getLatLonForGrid(grid) {
   };
 }
 
+// ===== heading / 方角 =====
+function updateHeadingFromGps(nextPosition) {
+  if (Number.isFinite(nextPosition.heading)) {
+    setHeading(nextPosition.heading);
+    return;
+  }
+
+  if (previousGpsPosition) {
+    const bearing = calculateBearing(
+      previousGpsPosition.latitude,
+      previousGpsPosition.longitude,
+      nextPosition.latitude,
+      nextPosition.longitude
+    );
+    if (Number.isFinite(bearing)) setHeading(bearing);
+  }
+}
+
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const toDeg = (value) => (value * 180) / Math.PI;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const deltaLon = toRad(lon2 - lon1);
+  const y = Math.sin(deltaLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);
+  return normalizeHeading(toDeg(Math.atan2(y, x)));
+}
+
+function normalizeHeading(value) {
+  return ((value % 360) + 360) % 360;
+}
+
+function setHeading(value) {
+  headingDeg = normalizeHeading(value);
+  localStorage.setItem("worldoriaHeadingDeg", String(headingDeg));
+}
+
+async function enableOrientationSensor() {
+  if (!("DeviceOrientationEvent" in window)) {
+    setStatus("方角センサーを利用できません");
+    return;
+  }
+
+  try {
+    if (typeof window.DeviceOrientationEvent.requestPermission === "function") {
+      const permission = await window.DeviceOrientationEvent.requestPermission();
+      if (permission !== "granted") {
+        setStatus("方角センサーが許可されませんでした");
+        return;
+      }
+    }
+
+    window.addEventListener("deviceorientation", handleDeviceOrientation);
+    orientationSensorEnabled = true;
+    setStatus("方角センサーを有効にしました");
+  } catch (error) {
+    console.warn("方角センサーの有効化に失敗しました。", error);
+    setStatus("方角センサーを利用できません");
+  }
+}
+
+function handleDeviceOrientation(event) {
+  if (gpsPosition && Number.isFinite(gpsPosition.heading)) return;
+
+  const webkitHeading = event.webkitCompassHeading;
+  if (Number.isFinite(webkitHeading)) {
+    setHeading(webkitHeading);
+    render();
+    return;
+  }
+
+  if (Number.isFinite(event.alpha)) {
+    setHeading(360 - event.alpha);
+    render();
+  }
+}
+
+function rotateDebugHeading() {
+  setHeading(headingDeg + 45);
+  setStatus("疑似headingを45度回転しました");
+  render();
+}
+
+function resetHeading() {
+  setHeading(0);
+  previousGpsPosition = null;
+  setStatus("headingを北向きにリセットしました");
+  render();
+}
+
 function startWatchingPosition() {
   if (!("geolocation" in navigator)) {
     setStatus("GPSが使えないため、疑似座標で探索します");
@@ -390,10 +498,20 @@ function startWatchingPosition() {
 
   watchId = navigator.geolocation.watchPosition(
     (position) => {
+      const nextPosition = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        heading: position.coords.heading,
+        updatedAt: position.timestamp
+      };
+      previousGpsPosition = gpsPosition;
+      updateHeadingFromGps(nextPosition);
       gpsPosition = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
+        heading: position.coords.heading,
         updatedAt: position.timestamp
       };
       setStatus("足跡が世界に刻まれました");
@@ -1110,7 +1228,13 @@ function formatTileInfo(gridId) {
   const { x, y } = parseGridId(gridId);
 
   if (!tile) {
-    return `${gridId} / 濃い霧 / 未探索`;
+    const hint = getUnobservedHintCategory(gridId);
+    return `${gridId} / 未観測 / まだ詳しく観測されていない土地です。${OSM_CATEGORY_LABELS[hint] || "地形"}の気配だけが見えます。`;
+  }
+
+  const visibility = getTileVisibilityState(tile);
+  if (visibility === "discovered") {
+    return `${tile.placeName} / 発見済みの土地です。通過記録があります。 / 滞在 ${formatDuration(getCurrentStayTime(gridId))}`;
   }
 
   const level = getTileLevel(tile.visitCount);
@@ -1118,6 +1242,25 @@ function formatTileInfo(gridId) {
   const osmText = tile.osmCategory && tile.osmCategory !== "none" ? ` / 周辺特徴 ${tile.osmCategoryLabel} → ${tile.osmRpgName}` : "";
   const buildingText = tile.building ? ` / 建物 ${tile.building.symbol}${tile.building.name}` : "";
   return `${tile.placeName} / ${level.name}${osmText}${buildingText} / 滞在 ${formatDuration(getCurrentStayTime(gridId))} / 訪問 ${tile.visitCount} / 道の接続 ${connections} / 最終 ${formatTime(tile.lastVisitedAt)}`;
+}
+
+function getTileVisibilityState(tile) {
+  if (!tile) return "unobserved";
+  if (tile.building || (Number(tile.stayTimeMs) || 0) >= DEBUG_BUILDING_SPAWN_STAY_MS || tile.visitCount >= 3) {
+    return "observed";
+  }
+  return "discovered";
+}
+
+function getUnobservedHintCategory(gridId) {
+  const cached = osmCache[gridId];
+  if (cached && cached.summary) {
+    const category = getDominantOsmCategory(cached.summary);
+    if (category !== "none") return category;
+  }
+
+  const hints = ["field", "forest", "water", "park", "commercial", "worship"];
+  return hints[hashString(gridId) % hints.length];
 }
 
 function formatTime(timestamp) {
@@ -1148,6 +1291,7 @@ function render() {
   elements.lngText.textContent = readout.longitude;
   elements.accuracyText.textContent = readout.accuracy;
   elements.updatedText.textContent = readout.updatedAt;
+  elements.headingText.textContent = `${Math.round(headingDeg)}°${orientationSensorEnabled ? " / sensor" : ""}`;
   elements.exploredCountText.textContent = String(stats.exploredCount);
   elements.totalVisitsText.textContent = String(stats.totalVisits);
   elements.bestTownText.textContent = stats.bestTown;
@@ -1251,19 +1395,26 @@ function renderMap(currentGrid) {
 
       if (tileData) {
         const level = getTileLevel(tileData.visitCount);
+        const visibility = getTileVisibilityState(tileData);
+        const showBuilding = visibility === "observed" && tileData.building;
         const osmClass = tileData.osmCategory && tileData.osmCategory !== "none" ? `osm-${tileData.osmCategory}` : "";
-        const buildingClass = tileData.building ? "has-building" : "";
-        tileButton.className = ["tile", level.className, osmClass, buildingClass, ...getConnectionClasses(x, y)].filter(Boolean).join(" ");
-        tileButton.appendChild(createTileContent(tileData.building ? tileData.building.symbol : OSM_SYMBOLS[tileData.osmCategory] || level.symbol, tileData.building ? "building-symbol" : "tile-label"));
+        const buildingClass = showBuilding ? "has-building" : "";
+        const connectionClasses = visibility === "unobserved" ? [] : getConnectionClasses(x, y);
+        tileButton.className = ["tile", visibility, level.className, osmClass, buildingClass, ...connectionClasses].filter(Boolean).join(" ");
+        tileButton.appendChild(createTileContent(showBuilding ? tileData.building.symbol : OSM_SYMBOLS[tileData.osmCategory] || level.symbol, showBuilding ? "building-symbol" : "tile-label"));
         tileButton.dataset.count = tileData.visitCount > 0 ? tileData.visitCount : "";
       } else {
-        // 未探索マスは霧。現在地の近くのみ少し薄くして、次に進みたくなる余白を作ります。
-        tileButton.className = `tile ${distance <= 1 ? "fog-near" : "fog-far"}`;
-        tileButton.appendChild(createTileContent(distance <= 1 ? "???" : "■■", "tile-label"));
+        // 未観測マスは真っ黒にせず、薄い地形の気配だけを見せます。
+        const hint = getUnobservedHintCategory(gridId);
+        tileButton.className = `tile unobserved hint-${hint}`;
+        tileButton.appendChild(createTileContent(HINT_SYMBOLS[hint] || "░", "tile-label"));
         tileButton.dataset.count = "";
       }
 
-      if (gridId === currentGrid.id) tileButton.classList.add("current");
+      if (gridId === currentGrid.id) {
+        tileButton.classList.add("current");
+        if (tileButton.style) tileButton.style.setProperty("--heading-deg", `${headingDeg}deg`);
+      }
       if (gridId === selectedGridId) tileButton.classList.add("selected");
 
       tileButton.addEventListener("click", () => {
@@ -1315,6 +1466,9 @@ elements.setHomeButton.addEventListener("click", setCurrentGridAsHome);
 elements.debugStayButton.addEventListener("click", addDebugStayTime);
 elements.debugIdleButton.addEventListener("click", debugRunIdleEvent);
 elements.debugBackdateButton.addEventListener("click", debugBackdateLastActive);
+elements.enableOrientationButton.addEventListener("click", enableOrientationSensor);
+elements.rotateHeadingButton.addEventListener("click", rotateDebugHeading);
+elements.resetHeadingButton.addEventListener("click", resetHeading);
 elements.closeOfflineLogButton.addEventListener("click", hideOfflineLogs);
 elements.closeTileDetailButton.addEventListener("click", hideTileDetail);
 elements.notificationBar.addEventListener("click", () => switchTab("log"));
